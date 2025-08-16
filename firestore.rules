@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 사용자 문서 규칙
+    match /users/{userId} {
+      // 사용자는 자신의 문서만 읽고 쓸 수 있음
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      // 관리자는 모든 사용자 문서를 읽을 수 있음
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'COMPANY_ADMIN'];
+    }
+
+    // 회사 문서 규칙
+    match /companies/{companyId} {
+      // 모든 인증된 사용자가 회사 정보를 읽을 수 있음
+      allow read: if request.auth != null;
+      // 관리자만 회사를 생성, 수정, 삭제할 수 있음
+      allow create, update, delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+
+    // 채용공고 문서 규칙
+    match /jobs/{jobId} {
+      // 모든 사용자가 활성 채용공고를 읽을 수 있음
+      allow read: if resource.data.isActive == true;
+      // 인증된 사용자는 모든 채용공고를 읽을 수 있음
+      allow read: if request.auth != null;
+      
+      // 관리자와 회사 관리자만 채용공고를 생성, 수정할 수 있음
+      allow create, update: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'COMPANY_ADMIN'];
+      
+      // 관리자만 채용공고를 삭제할 수 있음
+      allow delete: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
+    }
+
+    // 지원서 문서 규칙
+    match /applications/{applicationId} {
+      // 사용자는 자신의 지원서만 읽을 수 있음
+      allow read: if request.auth != null && request.auth.uid == resource.data.userId;
+      
+      // 회사 관리자와 관리자는 해당 회사의 채용공고에 대한 지원서를 읽을 수 있음
+      allow read: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'COMPANY_ADMIN'];
+      
+      // 인증된 사용자는 지원서를 생성할 수 있음 (자신의 지원서만)
+      allow create: if request.auth != null && 
+        request.auth.uid == request.resource.data.userId;
+      
+      // 회사 관리자와 관리자만 지원서 상태를 업데이트할 수 있음
+      allow update: if request.auth != null && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['ADMIN', 'COMPANY_ADMIN'] &&
+        // 상태 필드만 변경 가능
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt']);
+    }
+
+    // 기본적으로 모든 다른 접근을 거부
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,48 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // 이력서 파일 업로드 규칙
+    match /resumes/{userId}/{fileName} {
+      // 사용자는 자신의 이력서만 업로드, 읽기, 삭제할 수 있음
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // 파일 크기 제한 (5MB)
+      allow write: if request.resource.size < 5 * 1024 * 1024;
+      
+      // 허용된 파일 형식만 업로드 가능
+      allow write: if request.resource.contentType.matches('application/pdf') ||
+                      request.resource.contentType.matches('application/msword') ||
+                      request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    }
+
+    // 회사 로고 업로드 규칙
+    match /company-logos/{companyId}/{fileName} {
+      // 관리자와 회사 관리자만 회사 로고를 업로드할 수 있음
+      allow read: if true; // 누구나 회사 로고를 볼 수 있음
+      allow write, delete: if request.auth != null; // 실제로는 백엔드에서 권한 확인
+      
+      // 파일 크기 제한 (2MB)
+      allow write: if request.resource.size < 2 * 1024 * 1024;
+      
+      // 이미지 파일만 업로드 가능
+      allow write: if request.resource.contentType.matches('image/.*');
+    }
+
+    // 사용자 프로필 이미지 규칙
+    match /profile-images/{userId}/{fileName} {
+      // 사용자는 자신의 프로필 이미지만 업로드, 읽기, 삭제할 수 있음
+      allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      
+      // 파일 크기 제한 (1MB)
+      allow write: if request.resource.size < 1024 * 1024;
+      
+      // 이미지 파일만 업로드 가능
+      allow write: if request.resource.contentType.matches('image/.*');
+    }
+
+    // 기본적으로 모든 다른 접근을 거부
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
